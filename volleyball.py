@@ -1,43 +1,40 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 # -----------------------------
 # Параметры площадки и сетки
 # -----------------------------
 court_length = 18.0    # длина площадки (м)
 court_width = 9.0      # ширина площадки (м)
-net_x = court_length / 2  # сетка посередине
-net_height = 2.43      # высота сетки (м, для мужчин)
+net_x = court_length / 2
+net_height = 2.43      # высота сетки (м)
 
 # -----------------------------
-# Физические параметры
+# Физика
 # -----------------------------
-g = 9.81  # ускорение свободного падения (м/с^2)
+g = 9.81  # м/с^2
 
-# -----------------------------
-# Функции
-# -----------------------------
-def simulate_throw(x0, y0, v0, alpha, phi, z0):
-    """
-    Возвращает координаты приземления и факт перелёта сетки
-    """
+def simulate_throw(x0, y0, v0, alpha, phi, z0, n_points=200):
+    """Возвращает траекторию и факт перелёта сетки"""
     vx = v0 * np.cos(alpha) * np.cos(phi)
     vy = v0 * np.cos(alpha) * np.sin(phi)
     vz = v0 * np.sin(alpha)
 
-    # Время до падения (решаем z(t)=0)
+    # время полёта (решаем z=0)
     A = -0.5 * g
     B = vz
     C = z0
     roots = np.roots([A, B, C])
     roots = roots[np.isreal(roots)]
-    t_flight = np.max(roots)  # берём положительное время
+    t_flight = np.max(roots)  # берём положительный корень
 
-    # Координаты приземления
-    x_land = x0 + vx * t_flight
-    y_land = y0 + vy * t_flight
+    t = np.linspace(0, t_flight, n_points)
+    x = x0 + vx * t
+    y = y0 + vy * t
+    z = z0 + vz * t - 0.5 * g * t**2
 
-    # Проверка пересечения сетки
+    # высота над сеткой
     crosses_net = False
     if vx > 0:
         t_net = (net_x - x0) / vx
@@ -45,61 +42,81 @@ def simulate_throw(x0, y0, v0, alpha, phi, z0):
             z_net = z0 + vz * t_net - 0.5 * g * t_net**2
             crosses_net = z_net > net_height
 
-    return x_land, y_land, crosses_net
-
+    return x, y, z, crosses_net, (x[-1], y[-1])
 
 def check_success(x0, y0, v0, alpha, phi, z0):
-    """
-    Успех = перелетел сетку и попал в площадку соперника
-    """
-    x_land, y_land, crosses_net = simulate_throw(x0, y0, v0, alpha, phi, z0)
+    """Успех = перелет сетки + приземление в пределах площадки соперника"""
+    x, y, z, crosses_net, (x_land, y_land) = simulate_throw(x0, y0, v0, alpha, phi, z0)
     lands_in_court = (net_x <= x_land <= court_length) and (0 <= y_land <= court_width)
     return crosses_net and lands_in_court
 
 # -----------------------------
-# Основные параметры броска (можно менять)
+# Основные параметры (можно менять)
 # -----------------------------
-v0 = 15.0              # начальная скорость (м/с)(в среднем от 15 до 30)
-alpha = np.deg2rad(45) # угол броска вверх (0-парал. полу, 90 - вверх)
-phi = np.deg2rad(0)    # угол в горизонтальной плоскости(0-по центру площадки соперника,  вправо >0 влево <0)
-z0 = 2.30              # рост игрока (высота удара, м)(рост + высота замаха)
+v0 = 10.0              # м/с
+alpha = np.deg2rad(60) # угол вверх
+phi = np.deg2rad(10)   # угол вбок
+z0 = 2.3               # м (атака в прыжке)
 
 # -----------------------------
-# Сетка начальных позиций (только своя половина)
+# Сетка начальных позиций
 # -----------------------------
-x_positions = np.linspace(0.5, net_x - 0.5, 40)
-y_positions = np.linspace(0.5, court_width - 0.5, 40)
+x_positions = np.linspace(0.5, net_x - 0.5, 30)
+y_positions = np.linspace(0.5, court_width - 0.5, 30)
 XX, YY = np.meshgrid(x_positions, y_positions)
 zone = np.zeros_like(XX)
 
 for i in range(len(y_positions)):
     for j in range(len(x_positions)):
         if check_success(x_positions[j], y_positions[i], v0, alpha, phi, z0):
-            zone[i, j] = 1  # успех
+            zone[i, j] = 1
         else:
-            zone[i, j] = -1 # неудача
+            zone[i, j] = -1
 
 # -----------------------------
 # Визуализация
 # -----------------------------
-fig, ax = plt.subplots(figsize=(12, 6))
+fig = plt.figure(figsize=(14, 6))
 
-# Поле целиком
-ax.set_xlim(0, court_length)
-ax.set_ylim(0, court_width)
+# 1) Карта успеха
+ax1 = fig.add_subplot(1, 2, 1)
+cmap = plt.colormaps.get_cmap("RdYlGn")
+mesh = ax1.pcolormesh(XX, YY, zone, cmap=cmap, shading='auto', vmin=-1, vmax=1)
 
-# Сетка (вертикальная линия)
-ax.axvline(net_x, color="black", linewidth=3, label="Сетка")
+ax1.axvline(net_x, color="black", linewidth=3, label="Сетка")
+ax1.set_xlim(0, court_length/2)
+ax1.set_ylim(0, court_width)
+ax1.set_title("Зона успеха (X0,Y0)")
+ax1.set_xlabel("X0 (м)")
+ax1.set_ylabel("Y0 (м)")
+ax1.legend()
+plt.colorbar(mesh, ax=ax1, label="-1 — неудача, 1 — успех")
 
-# Раскраска начальных позиций
-cmap = plt.colormaps.get_cmap("RdYlGn")  # красный-неудача, зелёный-успех
-mesh = ax.pcolormesh(XX, YY, zone, cmap=cmap, shading='auto', vmin=-1, vmax=1)
+# 2) 3D траектория (берем одну точку, напр. середину своей половины)
+x0 = court_length/4
+y0 = court_width/2
+x, y, z, crosses_net, (x_land, y_land) = simulate_throw(x0, y0, v0, alpha, phi, z0)
 
-# Подписи
-ax.set_title(f"Зона попадания (v0={v0:.1f} м/с, α={np.rad2deg(alpha):.1f}°, φ={np.rad2deg(phi):.1f}°, рост={z0:.2f} м)")
-ax.set_xlabel("X0 (м) — начальная позиция игрока")
-ax.set_ylabel("Y0 (м)")
-ax.legend()
-plt.colorbar(mesh, ax=ax, label="-1 — неудача, 1 — успех")
+ax2 = fig.add_subplot(1, 2, 2, projection="3d")
+ax2.plot(x, y, z, color="blue", label="Траектория")
+ax2.scatter([x0], [y0], [z0], color="green", s=50, label="Начало")
+ax2.scatter([x_land], [y_land], [0], color="red", s=50, label="Приземление")
 
+# Сетка (плоскость)
+yy = np.linspace(0, court_width, 10)
+zz = np.linspace(0, net_height, 10)
+YY_net, ZZ_net = np.meshgrid(yy, zz)
+XX_net = np.ones_like(YY_net) * net_x
+ax2.plot_surface(XX_net, YY_net, ZZ_net, color="black", alpha=0.3)
+
+ax2.set_xlim(0, court_length)
+ax2.set_ylim(0, court_width)
+ax2.set_zlim(0, 6)
+ax2.set_xlabel("X (м)")
+ax2.set_ylabel("Y (м)")
+ax2.set_zlabel("Z (м)")
+ax2.set_title("Пример траектории в 3D")
+ax2.legend()
+
+plt.tight_layout()
 plt.show()
