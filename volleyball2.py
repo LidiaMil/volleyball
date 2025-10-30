@@ -1,13 +1,17 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-# Court and net parameters
+# --- Параметры площадки и сетки ---
 court_length = 18.0
 court_width = 9.0
 net_x = court_length / 2
 net_height = 2.43
 
-# Physics
+# Минимальная дистанция от сетки, где нельзя стоять (см -> м)
+min_dist_from_net_cm = 30
+min_dist_from_net = min_dist_from_net_cm / 100.0
+
+# --- Физика ---
 g = 9.81
 
 def flight_time(vz, z0):
@@ -52,7 +56,8 @@ def success(x0, y0, v0, alpha, phi, z0):
     lands_in_opponent = (net_x <= x_land <= court_length) and (0 <= y_land <= court_width)
     return bool(net_clear and lands_in_opponent)
 
-def success_exists_over_phi(x0, y0, v0, alpha, z0, phi_min=-np.deg2rad(45), phi_max=np.deg2rad(45), nphi=241):
+def success_exists_over_phi(x0, y0, v0, alpha, z0,
+                            phi_min=-np.deg2rad(45), phi_max=np.deg2rad(45), nphi=241):
     phis = np.linspace(phi_min, phi_max, nphi)
     best_phi = np.nan
     best_dist = None
@@ -71,42 +76,58 @@ def success_exists_over_phi(x0, y0, v0, alpha, z0, phi_min=-np.deg2rad(45), phi_
     return any_success, best_phi
 
 if __name__ == "__main__":
-    # Example parameters
-    v0 = 10.0
+    # Пример параметров подачи Вариант 1 — стандартная подача снизу (учебная)
+    v0 = 15.0
     alpha = np.deg2rad(30.0)
-    z0 = 2.3
-    nx, ny = 50, 30
-    x_positions = np.linspace(0.5, net_x - 0.5, nx)
+    z0 = 2.0
+
+
+
+    nx, ny = 100, 50
+    # НЕ позволяем стартовать ближе min_dist_from_net к сетке
+    x_min = 0.5
+    x_max = net_x - min_dist_from_net
+
+    x_positions = np.linspace(x_min, x_max, nx)
     y_positions = np.linspace(0.25, court_width - 0.25, ny)
     XX, YY = np.meshgrid(x_positions, y_positions)
+
     success_grid = np.zeros_like(XX, dtype=float)
     best_phi_grid = np.full_like(XX, fill_value=np.nan, dtype=float)
+
     for i in range(ny):
         for j in range(nx):
-            ok, phi_star = success_exists_over_phi(XX[i,j], YY[i,j], v0, alpha, z0)
-            success_grid[i,j] = 1.0 if ok else 0.0
-            best_phi_grid[i,j] = phi_star
-    # Plot success region
-    plt.figure(figsize=(8,5))
-    plt.pcolormesh(XX, YY, success_grid, shading='auto', vmin=0.0, vmax=1.0)
-    plt.axvline(net_x, linewidth=2)
-    plt.xlim(0, net_x)
-    plt.ylim(0, court_width)
-    plt.xlabel("X0 (м)")
-    plt.ylabel("Y0 (м)")
-    plt.title("Существует ли φ для успешной подачи")
-    plt.colorbar(label="1 — есть φ, 0 — нет φ")
-    plt.show()
-    # Plot best phi map (deg), masked where no success
+            ok, phi_star = success_exists_over_phi(XX[i, j], YY[i, j], v0, alpha, z0)
+            success_grid[i, j] = 1.0 if ok else 0.0
+            best_phi_grid[i, j] = phi_star
+
+    # Готовим данные для второго графика (оптимальный φ, где возможен успех)
     phi_deg = np.rad2deg(best_phi_grid)
     phi_deg_masked = np.where(success_grid > 0.5, phi_deg, np.nan)
-    plt.figure(figsize=(8,5))
-    mesh = plt.pcolormesh(XX, YY, phi_deg_masked, shading='auto')
-    plt.axvline(net_x, linewidth=2)
-    plt.xlim(0, net_x)
-    plt.ylim(0, court_width)
-    plt.xlabel("X0 (м)")
-    plt.ylabel("Y0 (м)")
-    plt.title("Оптимальный азимут φ (°), где успех возможен")
-    plt.colorbar(mesh, label="φ (°)")
+
+    # --- ОДНА ФИГУРА, ДВЕ ОСИ РЯДОМ ---
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(13, 5), constrained_layout=True)
+
+    # Левый график: достижимость (есть ли φ)
+    m1 = ax1.pcolormesh(XX, YY, success_grid, shading='auto', vmin=0.0, vmax=1.0)
+    ax1.axvline(net_x, linewidth=2, color='k')  # линия сетки
+    ax1.axvline(net_x - min_dist_from_net, linewidth=1, linestyle='--', color='k')  # запретная зона
+    ax1.set_xlim(x_min, net_x)
+    ax1.set_ylim(0, court_width)
+    ax1.set_xlabel("X0 (м)")
+    ax1.set_ylabel("Y0 (м)")
+    ax1.set_title("Существует ли φ для успешной подачи")
+    cb1 = fig.colorbar(m1, ax=ax1, label="1 — есть φ, 0 — нет φ")
+
+    # Правый график: оптимальный азимут φ (°)
+    m2 = ax2.pcolormesh(XX, YY, phi_deg_masked, shading='auto')
+    ax2.axvline(net_x, linewidth=2, color='k')
+    ax2.axvline(net_x - min_dist_from_net, linewidth=1, linestyle='--', color='k')
+    ax2.set_xlim(x_min, net_x)
+    ax2.set_ylim(0, court_width)
+    ax2.set_xlabel("X0 (м)")
+    ax2.set_ylabel("Y0 (м)")
+    ax2.set_title("Оптимальный азимут φ (°), где успех возможен")
+    cb2 = fig.colorbar(m2, ax=ax2, label="φ (°)")
+
     plt.show()
