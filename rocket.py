@@ -92,101 +92,155 @@
 # plt.show()
 
 
+
+
+# import numpy as np
+# import matplotlib.pyplot as plt
+
+# # -----------------------------------------------
+# # Параметры ступеней
+# # -----------------------------------------------
+# m_s1 = 15000
+# m_s2 = 6000
+# m_s3 = 3000
+# m_payload = 2000
+
+# Ve1 = 2800
+# Ve2 = 3200
+# Ve3 = 3600
+
+# mdot1 = mdot2 = mdot3 = 200.0
+
+# total_fuel = 24000
+
+# fuel_scenarios = [
+#     (12000, 8000, 4000),
+#     (8000, 8000, 8000),
+#     (6000, 10000, 8000),
+#     (4000, 8000, 12000),
+#     (14000, 6000, 4000)
+# ]
+
+# def simulate_three_stage(mf1, mf2, mf3, dt=0.1):
+#     fuel = [mf1, mf2, mf3]
+#     dry  = [m_s1, m_s2, m_s3]
+#     Ve   = [Ve1, Ve2, Ve3]
+#     mdot = [mdot1, mdot2, mdot3]
+
+#     m = m_payload + sum(dry) + sum(fuel)
+#     V = 0.0
+#     t = 0.0
+
+#     times = [t]
+#     velocities = [V]
+
+#     stage = 0
+
+#     # сюда запишем моменты отделения ступеней
+#     separation_times = []
+
+#     while stage < 3:
+#         burn_time = fuel[stage] / mdot[stage]
+#         steps = int(np.ceil(burn_time / dt))
+#         burned = 0.0
+
+#         for _ in range(steps):
+#             if burned >= fuel[stage]:
+#                 break
+
+#             dm = mdot[stage] * dt
+#             if burned + dm > fuel[stage]:
+#                 dm = fuel[stage] - burned
+
+#             burned += dm
+#             m -= dm
+
+#             dV = Ve[stage] * (dm / m)
+#             V += dV
+#             t += dt
+
+#             times.append(t)
+#             velocities.append(V)
+
+#         # фиксируем момент отделения ступени
+#         separation_times.append((t, V))
+
+#         # отделяем ступень
+#         m -= dry[stage]
+#         stage += 1
+
+#     return np.array(times), np.array(velocities), separation_times
+
+
+# # ------------------------------------------------
+# # Построение графика с точками отделения
+# # ------------------------------------------------
+# plt.figure(figsize=(10, 6))
+
+# for i, (mf1, mf2, mf3) in enumerate(fuel_scenarios, start=1):
+#     t_arr, V_arr, sep = simulate_three_stage(mf1, mf2, mf3)
+
+#     plt.plot(t_arr, V_arr / 1000, label=f"Сценарий {i}: {mf1}/{mf2}/{mf3} кг")
+
+#     # наносим точки отделения
+#     for k, (ts, Vs) in enumerate(sep):
+#         plt.scatter(ts, Vs/1000, marker='o', s=40)
+#         plt.text(ts, Vs/1000,
+#                  f"  Отделение {k+1}-й",
+#                  fontsize=8, verticalalignment='bottom')
+
+# plt.title("Зависимость скорости трёхступенчатой ракеты от времени\n"
+#           "с отмеченными точками отделения ступеней")
+# plt.xlabel("Время, с")
+# plt.ylabel("Скорость, км/с")
+# plt.grid(True)
+# plt.legend()
+# plt.tight_layout()
+# plt.show()
+
+
 import numpy as np
 import matplotlib.pyplot as plt
 
-# -----------------------------------------------
-# Фиксированные параметры ступеней и нагрузки
-# -----------------------------------------------
-m_s1 = 15000   # сухая масса 1-й ступени
-m_s2 = 6000    # сухая масса 2-й ступени
-m_s3 = 3000    # сухая масса 3-й ступени
-m_payload = 2000  # ПН
+g = 9.8
 
-# Скорости истечения газов
-Ve1 = 2800
-Ve2 = 3200
-Ve3 = 3600
+# --- параметры ракеты ---
+m_c1, m_c2 = 1500, 800       # конструкционные массы
+m_t1, m_t2 = 3000, 2000      # топливо
+m_n = 1000                   # полезная нагрузка
 
-# Расходы топлива (постоянные)
-mdot1 = mdot2 = mdot3 = 200.0
+Ve1, Ve2 = 2800, 3200        # скорости истечения газов
 
-# Общая масса топлива
-total_fuel = 24000
+def initial_velocity():
+    m0 = m_c1 + m_t1 + m_c2 + m_t2 + m_n
+    m1 = m_c2 + m_t2 + m_n
+    m2 = m_n
+    dV1 = Ve1 * np.log(m0 / m1)
+    dV2 = Ve2 * np.log(m1 / m2)
+    return dV1 + dV2
 
-# 5 различных сценариев распределения топлива
-fuel_scenarios = [
-    (12000, 8000, 4000),   # Сценарий 1: преимущество 1-й ступени
-    (8000,  8000, 8000),   # Сценарий 2: равномерное распределение
-    (6000,  10000, 8000),  # Сценарий 3: максимум топлива во 2-й
-    (4000,  8000, 12000),  # Сценарий 4: акцент на 3-й ступени
-    (14000, 6000, 4000),   # Сценарий 5: сильный перекос в пользу 1-й
-]
+def range_ballistic(h0, theta_deg):
+    V0 = initial_velocity()
+    theta = np.radians(theta_deg)
+    Vy0 = V0 * np.sin(theta)
+    Vx0 = V0 * np.cos(theta)
+    T = (Vy0 + np.sqrt(Vy0**2 + 2 * g * h0)) / g
+    R = Vx0 * T
+    return R   # м
 
-# Проверка суммарного топлива
-for mf1, mf2, mf3 in fuel_scenarios:
-    assert abs((mf1 + mf2 + mf3) - total_fuel) < 1e-6
+# --- исследование дальности от высоты для разных углов ---
+heights = np.linspace(0, 20000, 21)   # 0–20 км
+angles = [10, 20, 30, 45, 60]         # физически осмысленные углы
 
-def simulate_three_stage(mf1, mf2, mf3, dt=0.1):
-    """Расчёт зависимости скорости от времени для трёхступенчатой ракеты."""
-    fuel = [mf1, mf2, mf3]
-    dry  = [m_s1, m_s2, m_s3]
-    Ve   = [Ve1, Ve2, Ve3]
-    mdot = [mdot1, mdot2, mdot3]
+plt.figure(figsize=(9, 5))
 
-    # Начальная масса
-    m = m_payload + sum(dry) + sum(fuel)
-    V = 0.0
-    t = 0.0
+for theta_fixed in angles:
+    ranges = [range_ballistic(h0, theta_fixed) / 1000 for h0 in heights]  # км
+    plt.plot(heights / 1000, ranges, marker='o', label=f"{theta_fixed}°")
 
-    times = [t]
-    velocities = [V]
-
-    stage = 0
-
-    while stage < 3:
-        burn_time = fuel[stage] / mdot[stage]
-        steps = int(np.ceil(burn_time / dt))
-        burned = 0.0
-
-        for _ in range(steps):
-            if burned >= fuel[stage]:
-                break
-
-            dm = mdot[stage] * dt
-            if burned + dm > fuel[stage]:
-                dm = fuel[stage] - burned
-
-            burned += dm
-            m_before = m
-            m -= dm
-
-            dV = Ve[stage] * (dm / m)
-            V += dV
-            t += dt
-
-            times.append(t)
-            velocities.append(V)
-
-        # отделение ступени
-        m -= dry[stage]
-        stage += 1
-
-    return np.array(times), np.array(velocities)
-
-
-# ------------------------------------------------
-# Построение графиков V(t) для всех сценариев
-# ------------------------------------------------
-plt.figure(figsize=(10, 6))
-
-for i, (mf1, mf2, mf3) in enumerate(fuel_scenarios, start=1):
-    t_arr, V_arr = simulate_three_stage(mf1, mf2, mf3)
-    plt.plot(t_arr, V_arr / 1000, label=f"Сценарий {i}: {mf1}/{mf2}/{mf3} кг")
-
-plt.title("Зависимость скорости трёхступенчатой ракеты от времени\nдля разных распределений топлива")
-plt.xlabel("Время, с")
-plt.ylabel("Скорость, км/с")
+plt.title("Зависимость дальности полёта от начальной высоты\nдля разных углов запуска")
+plt.xlabel("Начальная высота, км")
+plt.ylabel("Дальность, км")
 plt.grid(True)
 plt.legend()
 plt.tight_layout()
