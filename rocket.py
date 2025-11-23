@@ -199,49 +199,145 @@
 # plt.show()
 
 
+# import numpy as np
+# import matplotlib.pyplot as plt
+
+# g = 9.8
+
+# # --- параметры ракеты ---
+# m_c1, m_c2 = 1500, 800       # конструкционные массы
+# m_t1, m_t2 = 3000, 2000      # топливо
+# m_n = 1000                   # полезная нагрузка
+
+# Ve1, Ve2 = 2800, 3200        # скорости истечения газов
+
+# def initial_velocity():
+#     m0 = m_c1 + m_t1 + m_c2 + m_t2 + m_n
+#     m1 = m_c2 + m_t2 + m_n
+#     m2 = m_n
+#     dV1 = Ve1 * np.log(m0 / m1)
+#     dV2 = Ve2 * np.log(m1 / m2)
+#     return dV1 + dV2
+
+# def range_ballistic(h0, theta_deg):
+#     V0 = initial_velocity()
+#     theta = np.radians(theta_deg)
+#     Vy0 = V0 * np.sin(theta)
+#     Vx0 = V0 * np.cos(theta)
+#     T = (Vy0 + np.sqrt(Vy0**2 + 2 * g * h0)) / g
+#     R = Vx0 * T
+#     return R   # м
+
+# # --- исследование дальности от высоты для разных углов ---
+# heights = np.linspace(0, 20000, 21)   # 0–20 км
+# angles = [10, 20, 30, 45, 60]         # физически осмысленные углы
+
+# plt.figure(figsize=(9, 5))
+
+# for theta_fixed in angles:
+#     ranges = [range_ballistic(h0, theta_fixed) / 1000 for h0 in heights]  # км
+#     plt.plot(heights / 1000, ranges, marker='o', label=f"{theta_fixed}°")
+
+# plt.title("Зависимость дальности полёта от начальной высоты\nдля разных углов запуска")
+# plt.xlabel("Начальная высота, км")
+# plt.ylabel("Дальность, км")
+# plt.grid(True)
+# plt.legend()
+# plt.tight_layout()
+# plt.show()
+
+
+
+
 import numpy as np
 import matplotlib.pyplot as plt
 
-g = 9.8
+# --------------------------------------
+# ПАРАМЕТРЫ РАКЕТЫ (упрощённая модель)
+# --------------------------------------
+V0 = 3000  # скорость после работы ступеней
+g = 9.81   # ускорение свободного падения
 
-# --- параметры ракеты ---
-m_c1, m_c2 = 1500, 800       # конструкционные массы
-m_t1, m_t2 = 3000, 2000      # топливо
-m_n = 1000                   # полезная нагрузка
+# Модель: скорость зависит от распределения топлива
+def final_velocity(alpha):
+    return V0 * (1 - 0.3 * alpha)
 
-Ve1, Ve2 = 2800, 3200        # скорости истечения газов
-
-def initial_velocity():
-    m0 = m_c1 + m_t1 + m_c2 + m_t2 + m_n
-    m1 = m_c2 + m_t2 + m_n
-    m2 = m_n
-    dV1 = Ve1 * np.log(m0 / m1)
-    dV2 = Ve2 * np.log(m1 / m2)
-    return dV1 + dV2
-
-def range_ballistic(h0, theta_deg):
-    V0 = initial_velocity()
+# Баллистическая дальность
+def range_ballistic(h0, theta_deg, alpha):
     theta = np.radians(theta_deg)
-    Vy0 = V0 * np.sin(theta)
-    Vx0 = V0 * np.cos(theta)
-    T = (Vy0 + np.sqrt(Vy0**2 + 2 * g * h0)) / g
-    R = Vx0 * T
-    return R   # м
+    V = final_velocity(alpha)
 
-# --- исследование дальности от высоты для разных углов ---
-heights = np.linspace(0, 20000, 21)   # 0–20 км
-angles = [10, 20, 30, 45, 60]         # физически осмысленные углы
+    t_flight = (V*np.sin(theta) + np.sqrt((V*np.sin(theta))**2 + 2*g*h0)) / g
+    R = V * np.cos(theta) * t_flight
+    return R / 1000  # км
 
-plt.figure(figsize=(9, 5))
 
-for theta_fixed in angles:
-    ranges = [range_ballistic(h0, theta_fixed) / 1000 for h0 in heights]  # км
-    plt.plot(heights / 1000, ranges, marker='o', label=f"{theta_fixed}°")
+# -------------------------------------------------------------------------------------
+# 1) R(θ) при разных высотах h0 и разных α  (как на твоём графике — три подграфика)
+# -------------------------------------------------------------------------------------
+angles = np.arange(10, 85, 5)
+heights = [0, 10000, 20000]              # 0, 10, 20 км
+alphas = [0.2, 0.5, 0.8]
 
-plt.title("Зависимость дальности полёта от начальной высоты\nдля разных углов запуска")
-plt.xlabel("Начальная высота, км")
-plt.ylabel("Дальность, км")
-plt.grid(True)
-plt.legend()
+plt.figure(figsize=(18, 6))
+
+for i, h0 in enumerate(heights):
+    plt.subplot(1, 3, i+1)
+    for alpha in alphas:
+        R = [range_ballistic(h0, th, alpha) for th in angles]
+        plt.plot(angles, R, marker='o', label=f'α = {alpha}')
+    plt.title(f"Начальная высота: {h0/1000} км")
+    plt.xlabel("Угол запуска, градусы")
+    plt.ylabel("Дальность, км")
+    plt.grid(True)
+    plt.legend()
+
+plt.suptitle("Зависимость дальности от угла, высоты и распределения топлива", fontsize=16)
+plt.tight_layout()
+plt.show()
+
+
+# -------------------------------------------------------------------------------------
+# 2) R(h0) при разных углах θ и разных α
+# -------------------------------------------------------------------------------------
+h0_vals = np.linspace(0, 20000, 25)
+
+plt.figure(figsize=(18, 6))
+
+for i, alpha in enumerate(alphas):
+    plt.subplot(1, 3, i+1)
+    for theta in [20, 30, 40, 45, 60]:
+        R = [range_ballistic(h0, theta, alpha) for h0 in h0_vals]
+        plt.plot(h0_vals/1000, R, marker='o', label=f'θ = {theta}°')
+    plt.title(f"Доля топлива α = {alpha}")
+    plt.xlabel("Начальная высота, км")
+    plt.ylabel("Дальность, км")
+    plt.grid(True)
+    plt.legend()
+
+plt.suptitle("Зависимость дальности от высоты для разных углов и α", fontsize=16)
+plt.tight_layout()
+plt.show()
+
+
+# -------------------------------------------------------------------------------------
+# 3) R(α) при разных углах θ и разных высотах h0
+# -------------------------------------------------------------------------------------
+alpha_vals = np.linspace(0.1, 0.9, 25)
+
+plt.figure(figsize=(18, 6))
+
+for i, h0 in enumerate(heights):
+    plt.subplot(1, 3, i+1)
+    for theta in [20, 30, 40, 45, 60]:
+        R = [range_ballistic(h0, theta, a) for a in alpha_vals]
+        plt.plot(alpha_vals, R, marker='o', label=f'θ = {theta}°')
+    plt.title(f"Начальная высота: {h0/1000} км")
+    plt.xlabel("Доля топлива α")
+    plt.ylabel("Дальность, км")
+    plt.grid(True)
+    plt.legend()
+
+plt.suptitle("Зависимость дальности от распределения топлива при разных углах и высотах", fontsize=16)
 plt.tight_layout()
 plt.show()
